@@ -1,11 +1,8 @@
-/* Configuración de Firebase
-   Pegá acá los datos de tu app web: Firebase Console > Configuración del proyecto > Tus apps > App web > "Configuración del SDK".
-   Mientras digan "TU_...", la tienda funciona en modo demo (datos locales de ejemplo). */
 window.FIREBASE_CONFIG = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyC8prnrhkMNhEvMbftZNKAwFjjXvVF4K-Q",
+  authDomain: "test-d5e89.firebaseapp.com",
+  projectId: "test-d5e89",
+  storageBucket: "test-d5e89.firebasestorage.app",
+  messagingSenderId: "849695252138",
+  appId: "1:849695252138:web:7da784a18f51acd5e4fad3"
 };
