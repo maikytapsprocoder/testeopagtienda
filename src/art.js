@@ -1,23 +1,43 @@
 /* ───────── Categorías e ilustraciones de producto ─────────
    Las ilustraciones se usan cuando un producto no tiene foto propia. */
 
-const CATS = {
-  perifericos:       { name: 'Periféricos',      tint: '#E7ECFF', acc: '#2347F5', art: 'headset', blurb: 'Mouse, teclados, auriculares, monitores y más' },
-  telefonos:         { name: 'Teléfonos',        tint: '#FFEBDD', acc: '#F26B3A', art: 'phone',   blurb: 'Smartphones, cargadores y accesorios' },
-  electrodomesticos: { name: 'Electrodomésticos', tint: '#DFF4EA', acc: '#0FA37F', art: 'fridge',  blurb: 'Heladeras, lavarropas, cocina y hogar' },
-  computacion:       { name: 'PCs y componentes', tint: '#ECE8FF', acc: '#6B4DF0', art: 'laptop',  blurb: 'Laptops, PCs armadas y componentes' }
-};
+const BUILTIN_CATS = [
+  { id: 'perifericos',       name: 'Periféricos',       tint: '#E7ECFF', acc: '#2347F5', art: 'headset', blurb: 'Mouse, teclados, auriculares, monitores y más', image: '', order: 1 },
+  { id: 'telefonos',         name: 'Teléfonos',         tint: '#FFEBDD', acc: '#F26B3A', art: 'phone',   blurb: 'Smartphones, cargadores y accesorios', image: '', order: 2 },
+  { id: 'electrodomesticos', name: 'Electrodomésticos', tint: '#DFF4EA', acc: '#0FA37F', art: 'fridge',  blurb: 'Heladeras, lavarropas, cocina y hogar', image: '', order: 3 },
+  { id: 'computacion',       name: 'PCs y componentes', tint: '#ECE8FF', acc: '#6B4DF0', art: 'laptop',  blurb: 'Laptops, PCs armadas y componentes', image: '', order: 4 }
+];
+/* Categorías iniciales: las de negocio.config.js si existen, si no las de la tienda de ejemplo */
+/* sampleData:false en negocio.config.js = la tienda arranca vacía (sin productos, banners ni categorías de ejemplo) */
+const SAMPLE_ON = !(window.NEGOCIO && window.NEGOCIO.sampleData === false);
+const DEFAULT_CATS = (window.NEGOCIO && Array.isArray(window.NEGOCIO.categories))
+  ? window.NEGOCIO.categories.map((c, i) => ({ tint: '#EEF0F4', acc: '#2347F5', art: 'box', blurb: '', image: '', order: i + 1, ...c }))
+  : BUILTIN_CATS;
+
+/* CATS se rellena con las categorías guardadas (colección "categories"); el admin puede crear, editar y borrar */
+const CATS = {};
+function applyCats(list) {
+  const l = (Array.isArray(list) && list.length ? list : DEFAULT_CATS).filter(c => c && c.id && c.name).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  for (const k of Object.keys(CATS)) delete CATS[k];
+  for (const c of l) CATS[c.id] = { tint: '#EEF0F4', acc: '#2347F5', art: 'box', blurb: '', image: '', ...c };
+}
+applyCats();
+/* Categoría de un producto; si no existe (borrada o con otro id) se usa la primera, nunca undefined */
+const CAT_NONE = { id: '', name: 'Otros', tint: '#EEF0F4', acc: '#2347F5', art: 'box', blurb: '', image: '' };
+const catById = id => CATS[id] || Object.values(CATS)[0] || CAT_NONE;
 
 const ART_LABELS = {
   mouse: 'Mouse', keyboard: 'Teclado', headset: 'Auriculares', monitor: 'Monitor', speaker: 'Parlante',
   phone: 'Celular', charger: 'Cargador', case: 'Funda', fridge: 'Heladera', washer: 'Lavarropas',
   microwave: 'Microondas', airfryer: 'Freidora de aire', robovac: 'Aspiradora robot', fan: 'Ventilador',
-  laptop: 'Laptop', tower: 'PC / gabinete', gpu: 'Placa de video', cpu: 'Procesador', ram: 'Memoria RAM', ssd: 'Disco SSD'
+  box: 'Caja / genérico', shirt: 'Prenda de ropa', laptop: 'Laptop', tower: 'PC / gabinete', gpu: 'Placa de video', cpu: 'Procesador', ram: 'Memoria RAM', ssd: 'Disco SSD'
 };
 
 const _D = '#1B2433', _D2 = '#2C384D', _L = '#CFD7E3', _G = '#E2B33E', _S = '#E9EEF5';
 
 const ART = {
+  box: c => `<path d="M100 36 164 66v66l-64 30-64-30V66Z" fill="${_S}" stroke="${_D}" stroke-width="5" stroke-linejoin="round"/><path d="M36 66l64 30 64-30M100 96v66" stroke="${_D}" stroke-width="5" fill="none"/><path d="M68 51l64 30v28" stroke="${c}" stroke-width="8" fill="none" stroke-linecap="round"/>`,
+  shirt: c => `<path d="M72 36 36 56l14 34 18-8v80h64V82l18 8 14-34-36-20c-4 12-14 18-28 18s-24-6-28-18Z" fill="${c}" stroke="${_D}" stroke-width="5" stroke-linejoin="round"/>`,
   mouse: c => `<rect x="66" y="28" width="68" height="140" rx="34" fill="${_D}"/><path d="M66 92h68M100 28v64" stroke="${_D2}" stroke-width="3"/><rect x="94" y="46" width="12" height="26" rx="6" fill="${c}"/>`,
   keyboard: c => {
     let k = '';
@@ -70,7 +90,21 @@ function artUri(key, accent) {
 
 /* Imagen de un producto: foto propia (URL o subida) o ilustración según categoría */
 function imgOf(p) {
-  if (p.image) return p.image;
-  const c = CATS[p.category] || CATS.perifericos;
+  const first = (Array.isArray(p.images) && p.images[0]) || p.image;
+  if (first) return first;
+  const c = catById(p.category);
   return artUri(p.art || c.art, c.acc);
+}
+
+/* Aplica un movimiento de stock (sign=-1 descuenta, +1 devuelve) a un producto, respetando el stock por variante. Devuelve los campos a guardar o null. */
+function stockPatch(p, items, sign) {
+  if (!p || p.stock === null || p.stock === undefined) return null;
+  const mine = items.filter(i => i.id === p.id), q = mine.reduce((t, i) => t + Number(i.qty || 0), 0);
+  if (!q) return null;
+  if (p.vstock && typeof p.vstock === 'object' && Object.keys(p.vstock).length) {
+    const vs = { ...p.vstock };
+    for (const i of mine) if (i.vk && i.vk in vs) vs[i.vk] = Math.max(0, Number(vs[i.vk] || 0) + sign * Number(i.qty || 0));
+    return { vstock: vs, stock: Object.values(vs).reduce((t, n) => t + (Number(n) || 0), 0) };
+  }
+  return { stock: Math.max(0, Number(p.stock) + sign * q) };
 }

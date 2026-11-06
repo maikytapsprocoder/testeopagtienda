@@ -7,22 +7,30 @@ service cloud.firestore {
     // En el panel se ingresa solo "user"; internamente es user@tienda-admin.local.
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email in ['user@tienda-admin.local'];
+        && (request.auth.token.email in ['user@tienda-admin.local']
+            || exists(/databases/$(database)/documents/admins/$(request.auth.token.email)));
     }
 
     // Un pedido nuevo solo puede crearse con esta forma y tamaños (evita basura y abuso).
     function validOrder() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['customer', 'items', 'itemCount', 'total', 'code', 'status', 'createdAt'])
+      return d.keys().hasOnly(['customer', 'items', 'itemCount', 'shipping', 'discount', 'coupon', 'total', 'code', 'status', 'createdAt'])
         && d.keys().hasAll(['customer', 'items', 'total', 'code', 'status', 'createdAt'])
         && d.status == 'nuevo'
         && d.createdAt == request.time
         && d.customer is map
-        && d.customer.keys().hasOnly(['name', 'phone', 'delivery', 'address', 'note'])
+        && d.customer.keys().hasOnly(['name', 'phone', 'delivery', 'address', 'zone', 'pickup', 'payment', 'note'])
         && d.customer.name is string && d.customer.name.size() > 0 && d.customer.name.size() <= 80
         && d.customer.phone is string && d.customer.phone.size() >= 7 && d.customer.phone.size() <= 30
         && d.customer.delivery in ['retiro', 'envio']
         && (!('address' in d.customer) || (d.customer.address is string && d.customer.address.size() <= 200))
+        && (!('pickup' in d.customer) || (d.customer.pickup is string && d.customer.pickup.size() <= 80))
+        && (!('zone' in d.customer) || (d.customer.zone is string && d.customer.zone.size() <= 80))
+        && (!('discount' in d) || (d.discount is number && d.discount >= 0 && d.discount <= 10000000))
+        && (!('coupon' in d) || (d.coupon is string && d.coupon.size() <= 30))
+        && (!('shipping' in d) || (d.shipping is number && d.shipping >= 0 && d.shipping <= 100000))
+        && (!('itemCount' in d) || (d.itemCount is number && d.itemCount <= 200))
+        && (!('payment' in d.customer) || (d.customer.payment is string && d.customer.payment.size() <= 60))
         && (!('note' in d.customer) || (d.customer.note is string && d.customer.note.size() <= 500))
         && d.items is list && d.items.size() > 0 && d.items.size() <= 50
         && d.total is number && d.total >= 0
@@ -34,6 +42,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    // Administradores adicionales (se gestionan desde el panel > Usuarios).
+    match /admins/{email} {
+      allow read, write: if isAdmin();
+    }
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     match /banners/{id} {
       allow read: if true;
       allow write: if isAdmin();
@@ -41,6 +57,29 @@ service cloud.firestore {
     match /settings/{id} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Estado público de un pedido (sin datos personales): el cliente lo consulta con su código.
+    match /orderStatus/{code} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status == 'nuevo'
+        && code.size() <= 20;
+      allow update, delete: if isAdmin();
+    }
+
+    // Reseñas: cualquiera puede enviar una (queda "pending"); solo se leen las aprobadas; el admin modera.
+    match /reviews/{id} {
+      allow read: if resource.data.status == 'approved' || isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['productId', 'name', 'rating', 'text', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.productId is string && request.resource.data.productId.size() > 0 && request.resource.data.productId.size() <= 100
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
+        && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && request.resource.data.text is string && request.resource.data.text.size() <= 600;
+      allow update, delete: if isAdmin();
     }
 
     // Pedidos: cualquiera puede crear uno (con validación); solo admins los ven y cambian.

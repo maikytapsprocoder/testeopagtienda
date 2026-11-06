@@ -1,13 +1,103 @@
 /* ───────── Datos de ejemplo (marcas y precios ficticios) ─────────
    Se cargan solos en modo demo, o desde Panel > Ajustes > "Cargar productos de ejemplo". */
 
+const DEFAULT_ZONES = [
+  { name: 'Mercedes', km: 0, cost: 0 },
+  { name: 'Fray Bentos', km: 35, cost: 70 },
+  { name: 'Villa Soriano', km: 35, cost: 70 },
+  { name: 'Dolores', km: 40, cost: 70 },
+  { name: 'Palmitas', km: 40, cost: 70 },
+  { name: 'José Enrique Rodó', km: 80, cost: 120 },
+  { name: 'Young', km: 85, cost: 130 },
+  { name: 'Nueva Palmira', km: 90, cost: 130 },
+  { name: 'Carmelo', km: 95, cost: 140 },
+  { name: 'Cardona', km: 105, cost: 150 },
+  { name: 'Paysandú', km: 120, cost: 170 },
+  { name: 'Trinidad', km: 125, cost: 170 },
+  { name: 'Colonia del Sacramento', km: 155, cost: 210 },
+  { name: 'Durazno', km: 160, cost: 220 },
+  { name: 'San José de Mayo', km: 195, cost: 260 },
+  { name: 'Florida', km: 220, cost: 290 },
+  { name: 'Salto', km: 240, cost: 310 },
+  { name: 'Montevideo', km: 290, cost: 370 },
+  { name: 'Tacuarembó', km: 295, cost: 380 },
+  { name: 'Rivera', km: 405, cost: 500 }
+];
+
+const DEFAULT_TERMS = `## Cómo comprar
+Armás tu carrito, confirmás el pedido con tus datos y el local se comunica con vos por WhatsApp para confirmar disponibilidad, medio de pago y entrega.
+
+## Precios y disponibilidad
+Los precios están en pesos uruguayos y pueden cambiar sin aviso. La disponibilidad se confirma al contactarte.
+
+## Entregas
+- Retiro en el local: sin costo.
+- Envío dentro de Mercedes: sin costo.
+- Otras localidades: el costo depende de la distancia y se muestra al elegir la localidad en el pedido.
+
+## Garantía, cambios y devoluciones
+Las condiciones de garantía, cambio y devolución dependen de cada producto. Consultalas en el local o por WhatsApp antes de comprar.`;
+
+const DEFAULT_PRIVACY = `## Qué datos pedimos
+Al hacer un pedido te pedimos tu nombre, un teléfono de contacto y, si elegís envío, la dirección de entrega.
+
+## Para qué los usamos
+Solo para gestionar tu pedido y comunicarnos con vos. No vendemos ni cedemos tus datos a terceros.
+
+## Dónde se guardan
+Los pedidos se guardan en servicios de Google Firebase, con acceso restringido al personal del local.
+
+## Tus derechos
+Podés pedir ver, corregir o eliminar tus datos escribiéndonos por WhatsApp o al correo de contacto.`;
+
+const DEFAULT_SERVICES = `## Servicios técnicos
+- Reparación de PC y notebooks
+- Armado de computadoras a medida
+- Mantenimiento y limpieza
+- Instalación de sistemas operativos y programas
+- Asesoramiento para elegir tu equipo
+
+Consultanos por WhatsApp para pedir un presupuesto.`;
+
 const DEFAULT_SETTINGS = {
+  brandColor: '#2347F5',
+  logo: '',
+  instagram: '',
+  facebook: '',
+  branches: [],
   storeName: 'Nodo Tecno',
   tagline: 'Tecnología y electrodomésticos para tu casa',
   perks: ['Hacé tu pedido online y coordinamos la entrega', 'Retiro en el local', 'Atención personalizada por WhatsApp'],
+  payMethods: ['Efectivo', 'Transferencia bancaria'],
+  payPickup: ['Tarjeta en el local'],
+  payDelivery: ['Tarjeta en domicilio (POS)'],
+  showShipping: true,
+  freeShippingFrom: 0,
+  catalogAll: false,
+  askPickup: false,
+  cloudName: '',
+  cloudPreset: '',
+  transferInfo: '',
+  reviewsMode: 'on',
+  mpMode: 'off', mpLink: '', mpUrl: '',
+  emailServiceId: '',
+  emailTemplateId: '',
+  emailPublicKey: '',
+  coupons: [],
   footerInfo: '',
   linkFallback: false,
-  waNumber: ''
+  waNumber: '',
+  contactWhatsapp: '59898297449',
+  contactEmail: '',
+  address: 'Espinosa 182, Mercedes, Soriano',
+  hours: ['Lunes a Viernes: 8:00 a 12:00 y 12:30 a 20:30'],
+  shippingZones: DEFAULT_ZONES,
+  maxPerProduct: 10,
+  maxUnits: 30,
+  pageTerms: DEFAULT_TERMS,
+  pagePrivacy: DEFAULT_PRIVACY,
+  pageServices: DEFAULT_SERVICES,
+  ...(() => { const n = { ...(window.NEGOCIO || {}) }; delete n.categories; return n; })()
 };
 
 const _P = (id, category, sub, name, brand, price, oldPrice, stock, art, description, specs) =>
@@ -51,6 +141,11 @@ const SEED_PRODUCTS = [
   _P('gabinete-atx-vidrio', 'computacion', 'Gabinetes', 'Gabinete ATX vidrio templado · 3 fans', 'Titan', 3290, 0, 12, 'tower', 'Panel lateral de vidrio y 3 ventiladores RGB incluidos.', 'Formato: ATX / mATX\nVentiladores: 3 x 120 mm RGB\nPanel: vidrio templado')
 ];
 
+const SEED_REVIEWS = [
+  { id: 'rs1', productId: 'teclado-clack-tkl', name: 'Martín', rating: 5, text: 'Muy buen teclado, el sonido de los switches es genial.', status: 'approved', createdAt: 1730000000000 },
+  { id: 'rs2', productId: 'teclado-clack-tkl', name: 'Lucía', rating: 4, text: 'Llegó rápido y funciona perfecto. Le falta el numérico pero es lo esperable.', status: 'approved', createdAt: 1730500000000 },
+  { id: 'rs3', productId: 'teclado-slim-bt', name: 'Diego', rating: 5, text: 'Cómodo y silencioso, lo uso con la notebook y el celular.', status: 'approved', createdAt: 1731000000000 }
+];
 const SEED_BANNERS = [
   { id: 'b-compu', order: 1, active: true, title: 'Semana de la computación', subtitle: 'Laptops, PCs y componentes con precios rebajados.', cta: 'Ver ofertas en PCs', link: 'computacion', color: '#2347F5', art: 'laptop', image: '' },
   { id: 'b-cel', order: 2, active: true, title: 'Tu próximo celular está acá', subtitle: 'Smartphones desde $ 5.990 y accesorios para cuidarlo.', cta: 'Ver teléfonos', link: 'telefonos', color: '#E8552B', art: 'phone', image: '' },

@@ -22,15 +22,16 @@ const newCode = () => 'P-' + Date.now().toString(36).toUpperCase().slice(-4) + M
 /* ── Modo demo ── */
 function createDemoDB() {
   const subs = { products: new Set(), banners: new Set(), settings: new Set(), orders: new Set() };
-  const key = c => 'nodo_demo_' + c;
-  const read = c => lsGet(key(c)) || [];
-  const emit = c => subs[c].forEach(cb => cb(read(c)));
+  const key = c => 'nodo_demo_' + (c === 'reviewsPublic' ? 'reviews' : c);
+  const read = c => { const l = lsGet(key(c)) || []; return c === 'reviewsPublic' ? l.filter(r => r.status === 'approved') : l; };
+  const emit = c => { (subs[c] || []).forEach(cb => cb(read(c))); if (c === 'reviews') (subs.reviewsPublic || []).forEach(cb => cb(read('reviewsPublic'))); };
 
   if (!lsGet('nodo_demo_init')) {
-    lsSet(key('products'), seedProducts());
-    lsSet(key('banners'), SEED_BANNERS);
+    lsSet(key('products'), SAMPLE_ON ? seedProducts() : []);
+    lsSet(key('banners'), SAMPLE_ON ? SEED_BANNERS : []);
     lsSet(key('settings'), [{ id: 'store', ...DEFAULT_SETTINGS }]);
     lsSet(key('orders'), []);
+    lsSet(key('reviews'), SAMPLE_ON ? SEED_REVIEWS : []);
     lsSet('nodo_demo_init', 1);
   }
   let admin = !!lsGet('nodo_demo_admin');
@@ -40,7 +41,7 @@ function createDemoDB() {
   return {
     mode: 'demo',
     subscribe(col, cb) {
-      subs[col].add(cb);
+      (subs[col] = subs[col] || new Set()).add(cb);
       setTimeout(() => cb(read(col)), 0);
       return () => subs[col].delete(cb);
     },
@@ -58,9 +59,19 @@ function createDemoDB() {
     async createOrder(order) {
       const code = newCode();
       const list = read('orders');
-      list.unshift({ id: 'o' + Date.now().toString(36), code, status: 'nuevo', createdAt: Date.now(), ...order });
+      list.unshift({ id: 'o' + Date.now().toString(36), code, status: 'nuevo', createdAt: Date.now(), stockApplied: true, ...order });
+      const prods = read('products');
+      for (const p of prods) { const pt = stockPatch(p, order.items || [], -1); if (pt) Object.assign(p, pt); }
+      lsSet(key('products'), prods); emit('products');
       lsSet(key('orders'), list); emit('orders');
+      const st = read('orderStatus'); st.push({ id: code, status: 'nuevo', updatedAt: Date.now() }); lsSet(key('orderStatus'), st);
       return code;
+    },
+    async createReview(r) { const l = lsGet(key('reviews')) || []; l.push({ id: 'r' + Date.now().toString(36), ...r, status: 'pending', createdAt: Date.now() }); lsSet(key('reviews'), l); emit('reviews'); },
+    async createAdmin() { throw new Error('En modo demo no se pueden crear usuarios reales. Conectá Firebase para usar esta función.'); },
+    async getOrderStatus(code) {
+      const d = read('orderStatus').find(x => x.id === code);
+      return d ? { status: d.status, updatedAt: d.updatedAt } : null;
     },
     auth: {
       onChange(cb) { authSubs.add(cb); setTimeout(() => cb(admin ? { email: 'user' + ADMIN_DOMAIN } : null), 0); },
@@ -105,8 +116,8 @@ async function createFirebaseDB() {
   return {
     mode: 'firebase',
     subscribe(col, cb, onErr) {
-      const ref = fsM.collection(fs, col);
-      const q = col === 'orders' ? fsM.query(ref, fsM.orderBy('createdAt', 'desc')) : ref;
+      const ref = fsM.collection(fs, col === 'reviewsPublic' ? 'reviews' : col);
+      const q = col === 'orders' ? fsM.query(ref, fsM.orderBy('createdAt', 'desc')) : col === 'reviewsPublic' ? fsM.query(ref, fsM.where('status', '==', 'approved')) : ref;
       return fsM.onSnapshot(q, snap => cb(snap.docs.map(norm)), err => { console.error(col, err); onErr && onErr(err); });
     },
     async save(col, id, data) {
@@ -118,7 +129,28 @@ async function createFirebaseDB() {
     async createOrder(order) {
       const code = newCode();
       await fsM.addDoc(fsM.collection(fs, 'orders'), { ...order, code, status: 'nuevo', createdAt: fsM.serverTimestamp() });
+      // Estado público (sin datos personales) para que el cliente consulte su pedido con el código
+      try { await fsM.setDoc(fsM.doc(fs, 'orderStatus', code), { status: 'nuevo', updatedAt: Date.now() }); } catch (e) { console.warn('orderStatus', e); }
       return code;
+    },
+    async createReview(r) { await fsM.addDoc(fsM.collection(fs, 'reviews'), { ...r, status: 'pending', createdAt: fsM.serverTimestamp() }); },
+    async getOrderStatus(code) {
+      const d = await fsM.getDoc(fsM.doc(fs, 'orderStatus', code));
+      return d.exists() ? d.data() : null;
+    },
+    async createAdmin(username, password) {
+      const email = userToEmail(username);
+      // El usuario se crea con una segunda conexión para no cerrar la sesión actual
+      const sec = appM.initializeApp(FB_CFG, 'sec' + Date.now()), secAuth = authM.getAuth(sec);
+      let existed = false;
+      try { await authM.createUserWithEmailAndPassword(secAuth, email, password); }
+      catch (e) {
+        if (e && e.code === 'auth/email-already-in-use') existed = true;
+        else if (e && /operation-not-allowed|admin-restricted/.test(e.code || '')) throw new Error('Firebase no permite crear usuarios desde la tienda. Activá el registro en Authentication > Configuración > Acciones del usuario, o creá el usuario a mano en Firebase y volvé a intentar.');
+        else throw new Error(authMsg(e));
+      } finally { try { await authM.signOut(secAuth); } catch { /* nada */ } }
+      await fsM.setDoc(fsM.doc(fs, 'admins', email), { email, createdAt: Date.now() });
+      return { email, existed };
     },
     auth: {
       onChange(cb) { authM.onAuthStateChanged(au, cb); },
