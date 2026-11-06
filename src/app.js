@@ -198,26 +198,36 @@ const ratingOf = pid => { const l = revsOf(pid); return { n: l.length, avg: l.le
 const starStr = n => '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
 const ratingChip = pid => { if (!reviewsOn()) return ''; const r = ratingOf(pid); return r.n ? `<p class="rate" aria-label="Valoración ${r.avg.toFixed(1)} de 5, ${r.n} opinion${r.n === 1 ? '' : 'es'}"><span class="stars" aria-hidden="true">${starStr(r.avg)}</span> <small>${r.avg.toFixed(1)} (${r.n})</small></p>` : ''; };
 const fmtRevDate = t => { try { return new Date(t).toLocaleDateString('es-UY', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
+const REV_PER = 4;
 function reviewsSection(p) {
   if (!reviewsOn()) return '';
   const l = revsOf(p.id), r = ratingOf(p.id), done = (lsGet('nodo_rev') || {})[p.id];
-  return `<section class="revs" id="revs" data-pid="${esc(p.id)}"><h3>Opiniones${r.n ? ` <small class="muted">· ${r.avg.toFixed(1)} de 5 (${r.n})</small>` : ''}</h3>
-    ${l.length ? `<ul class="rev-list">${l.slice(0, 20).map(x => `<li><div class="rev-h"><span class="stars" aria-label="${x.rating} de 5">${starStr(x.rating)}</span> <b>${esc(x.name)}</b> <small class="muted">${fmtRevDate(x.createdAt)}</small></div>${x.text ? `<p>${esc(x.text)}</p>` : ''}</li>`).join('')}</ul>` : '<p class="muted">Todavía no hay opiniones. ¡Sé el primero en dejar una!</p>'}
-    ${done ? '<p class="note">Gracias por tu opinión. Se publica cuando la revisamos.</p>' : `<details class="rev-form"><summary class="btn btn-line btn-sm">Dejar una opinión</summary>
-      <div class="rev-in" data-pid="${esc(p.id)}"><fieldset class="rstars"><legend>Tu puntaje</legend>${[5, 4, 3, 2, 1].map(n => `<input type="radio" name="rv-r" id="rv-${n}" value="${n}"><label for="rv-${n}" title="${n} de 5"><span class="sr">${n} estrellas</span>★</label>`).join('')}</fieldset>
-      <div class="field"><label for="rv-n">Tu nombre</label><input class="in" id="rv-n" maxlength="40" autocomplete="given-name"></div>
-      <div class="field"><label for="rv-t">Comentario (opcional)</label><textarea class="in" id="rv-t" rows="3" maxlength="600"></textarea></div>
-      <input type="text" id="rv-h" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
-      <p class="err" id="rv-e" hidden role="alert"></p><button type="button" class="btn btn-primary btn-sm" data-act="revSend">Enviar opinión</button></div></details>`}
-  </section>`;
+  const ui = (state.revUi = state.revUi || {})[p.id] || (state.revUi[p.id] = { page: 0, open: false });
+  const pages = Math.max(1, Math.ceil(l.length / REV_PER)); ui.page = Math.min(ui.page, pages - 1);
+  const dist = [5, 4, 3, 2, 1].map(n => ({ n, c: l.filter(x => Math.round(x.rating) === n).length }));
+  const pager = pages > 1 ? `<nav class="rev-pg" aria-label="Páginas de opiniones"><button type="button" class="pgb" data-act="revPage" data-pid="${esc(p.id)}" data-i="${ui.page - 1}" ${ui.page === 0 ? 'disabled' : ''} aria-label="Anterior">‹</button>${Array.from({ length: pages }, (_, i) => `<button type="button" class="pgb ${i === ui.page ? 'on' : ''}" data-act="revPage" data-pid="${esc(p.id)}" data-i="${i}" ${i === ui.page ? 'aria-current="page"' : ''}>${i + 1}</button>`).join('')}<button type="button" class="pgb" data-act="revPage" data-pid="${esc(p.id)}" data-i="${ui.page + 1}" ${ui.page >= pages - 1 ? 'disabled' : ''} aria-label="Siguiente">›</button></nav>` : '';
+  return `<details class="revs" id="revs" data-pid="${esc(p.id)}" ${ui.open ? 'open' : ''}>
+    <summary><span class="rv-t">Opiniones</span>${r.n ? `<span class="rv-avg"><b>${r.avg.toFixed(1)}</b><span class="stars" aria-hidden="true">${starStr(r.avg)}</span><small>${r.n} opinion${r.n === 1 ? '' : 'es'}</small></span>` : '<small class="muted">Sé el primero en opinar</small>'}<i class="rv-chev" aria-hidden="true"></i></summary>
+    <div class="rv-body">
+      ${r.n ? `<div class="rv-dist" aria-hidden="true">${dist.map(d => `<div><span>${d.n}★</span><i><u style="width:${Math.round(d.c / r.n * 100)}%"></u></i><small>${d.c}</small></div>`).join('')}</div>` : ''}
+      ${l.length ? `<ul class="rev-list">${l.slice(ui.page * REV_PER, ui.page * REV_PER + REV_PER).map(x => `<li><div class="rev-h"><span class="rv-av" aria-hidden="true">${esc((x.name || '?').trim().charAt(0).toUpperCase())}</span><div><b>${esc(x.name)}</b><small class="muted">${fmtRevDate(x.createdAt)}</small></div><span class="stars" aria-label="${x.rating} de 5">${starStr(x.rating)}</span></div>${x.text ? `<p>${esc(x.text)}</p>` : ''}</li>`).join('')}</ul>${pager}` : '<p class="muted">Todavía no hay opiniones de este producto.</p>'}
+      ${done ? '<p class="note">Gracias por tu opinión. Se publica cuando la revisamos.</p>' : `<details class="rev-form"><summary class="btn btn-line btn-sm">Dejar una opinión</summary>
+        <div class="rev-in" data-pid="${esc(p.id)}"><fieldset class="rstars"><legend>Tu puntaje</legend>${[5, 4, 3, 2, 1].map(n => `<input type="radio" name="rv-r" id="rv-${n}" value="${n}"><label for="rv-${n}" title="${n} de 5"><span class="sr">${n} estrellas</span>★</label>`).join('')}</fieldset>
+        <div class="field"><label for="rv-n">Tu nombre</label><input class="in" id="rv-n" maxlength="40" autocomplete="given-name"></div>
+        <div class="field"><label for="rv-t">Comentario (opcional)</label><textarea class="in" id="rv-t" rows="3" maxlength="600"></textarea></div>
+        <input type="text" id="rv-h" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
+        <p class="err" id="rv-e" hidden role="alert"></p><button type="button" class="btn btn-primary btn-sm" data-act="revSend">Enviar opinión</button></div></details>`}
+    </div>
+  </details>`;
 }
 function refreshReviews() { // las opiniones llegan después de abrir la ficha: se actualizan sin cerrarla
   const sec = $('#dlgProduct #revs');
-  if (!sec || $('details[open]', sec)) return;
+  if (!sec || $('.rev-form[open]', sec)) return;
   const p = state.products.concat(SAMPLE).find(x => x.id === sec.dataset.pid); if (!p) return;
   sec.outerHTML = reviewsSection(p);
   const h = $('#dlgProduct .pd-b h2'), old = $('#dlgProduct .pd-b .rate'); if (old) old.remove(); if (h) h.insertAdjacentHTML('afterend', ratingChip(p.id));
 }
+document.addEventListener('toggle', e => { const d = e.target; if (d && d.id === 'revs' && d.dataset.pid) { (state.revUi = state.revUi || {})[d.dataset.pid] = { ...(state.revUi[d.dataset.pid] || { page: 0 }), open: d.open }; } }, true);
 async function sendReview(btn) {
   const box = btn.closest('.rev-in'), pid = box.dataset.pid, err = m => { const e = $('#rv-e'); e.textContent = m; e.hidden = false; };
   const rating = +(($('input[name=rv-r]:checked', box) || {}).value || 0), name = $('#rv-n').value.trim(), text = $('#rv-t').value.trim();
@@ -753,6 +763,7 @@ document.addEventListener('click', e => {
     const id = t.dataset.id, a = t.dataset.act;
     if (a === 'mpPay') mpPay(t);
     else if (a === 'revSend') sendReview(t);
+    else if (a === 'revPage') { const pid = t.dataset.pid, ui = state.revUi[pid]; ui.page = Math.max(0, +t.dataset.i); ui.open = true; const sec = $('#dlgProduct #revs'), p = state.products.concat(SAMPLE).find(x => x.id === pid); if (sec && p) { sec.outerHTML = reviewsSection(p); const n = $('#dlgProduct #revs'); n && n.scrollIntoView({ block: 'nearest' }); } }
     else if (a === 'open') openProduct(id);
     else if (a === 'add') { const p = activeProducts().find(x => x.id === id); if (p && prodVariants(p).length) openProduct(id); else addToCart(id); }
     else if (a === 'hero') setHero(+t.dataset.i);

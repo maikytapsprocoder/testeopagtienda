@@ -169,7 +169,7 @@ Hay dos modos (Ajustes → Mercado Pago):
    - Probalo primero con las credenciales de prueba de Mercado Pago.
 
 ## Opiniones de clientes
-Los clientes dejan puntaje (1–5) y comentario en la ficha del producto. Las opiniones quedan **pendientes** y solo se publican cuando las aprobás en el panel → Opiniones (también podés ocultarlas o eliminarlas). Se pueden desactivar en Ajustes. Hay que **republicar `firestore.rules`** (colección `reviews`). Sin verificación de compra: la moderación es la protección contra spam.
+Los clientes dejan puntaje (1–5) y comentario en la ficha del producto, en un apartado desplegable con resumen de estrellas, distribución y páginas de 4 opiniones. Las opiniones quedan **pendientes** y solo se publican cuando las aprobás en el panel → Opiniones (también podés ocultarlas o eliminarlas). Se pueden desactivar en Ajustes. Hay que **republicar `firestore.rules`** (colección `reviews`). Sin verificación de compra: la moderación es la protección contra spam.
 
 ## Códigos de barras
 - **Cargar el código**: en el producto, campo "Código de barras" (escribilo, escanealo con la cámara o con un lector USB). Si el producto no trae código, **Generar** crea uno interno único. El sistema avisa si el dígito verificador de un EAN/UPC está mal o si el código ya lo usa otro producto.
