@@ -71,13 +71,13 @@ function renderAdminBody() {
 function productRows() {
   const q = state.admin.q.toLowerCase(), c = state.admin.cat;
   const l = [...state.products].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-    .filter(p => (!c || p.category === c) && (!q || [p.name, p.brand, p.sub].join(' ').toLowerCase().includes(q)));
+    .filter(p => (!c || p.category === c) && (!q || [p.name, p.brand, p.sub, p.barcode].join(' ').toLowerCase().includes(q)));
   if (!state.loaded.products) return '<div class="empty"><p>Cargando productos…</p></div>';
   if (!l.length) return `<div class="empty"><h3>${state.products.length ? 'Sin resultados' : 'Todavía no hay productos'}</h3><p>${state.products.length ? 'Probá con otra búsqueda.' : 'Agregá el primero, o cargá los productos de ejemplo desde Ajustes.'}</p></div>`;
   return `<div class="rows"><div class="arow head"><span></span><span>Producto</span><span>Precio</span><span>Precio antes</span><span>Stock</span><span>Visible</span><span></span></div>` +
     l.map(p => `<div class="arow prow ${p.active === false ? 'off' : ''}" style="--tint:${catOf(p).tint}">
       <img src="${esc(imgOf(p))}" alt="">
-      <div class="nm">${esc(p.name)}<small>${esc(catOf(p).name)}${p.sub ? ' · ' + esc(p.sub) : ''}</small></div>
+      <div class="nm">${esc(p.name)}<small>${esc(catOf(p).name)}${p.sub ? ' · ' + esc(p.sub) : ''}${p.barcode ? ' · <span class="bcn">' + esc(p.barcode) + '</span>' : ''}</small></div>
       <div class="nums"><label class="cell"><span class="lab">Precio</span><input class="in" type="number" min="0" step="any" inputmode="decimal" aria-label="Precio de ${esc(p.name)}" data-act="admInline" data-field="price" data-id="${esc(p.id)}" value="${esc(p.price)}"></label>
       <label class="cell"><span class="lab">Antes</span><input class="in" type="number" min="0" step="any" inputmode="decimal" aria-label="Precio anterior de ${esc(p.name)}" placeholder="Sin oferta" data-act="admInline" data-field="oldPrice" data-id="${esc(p.id)}" value="${p.oldPrice ? esc(p.oldPrice) : ''}"></label>
       <label class="cell"><span class="lab">Stock</span><input class="in" type="number" min="0" step="1" inputmode="numeric" aria-label="Stock de ${esc(p.name)}" placeholder="Sin límite" data-act="admInline" data-field="stock" data-id="${esc(p.id)}" value="${p.stock === null || p.stock === undefined ? '' : esc(p.stock)}"></label>
@@ -87,7 +87,7 @@ function productRows() {
 function productsTab() {
   return `<div class="a-tools"><input class="in" type="search" placeholder="Buscar producto" aria-label="Buscar producto" data-act="admSearch" value="${esc(state.admin.q)}">
     <select class="in" aria-label="Filtrar por sección" data-act="admCatFilter"><option value="">Todas las secciones</option>${Object.entries(CATS).map(([k, c]) => `<option value="${k}" ${state.admin.cat === k ? 'selected' : ''}>${c.name}</option>`).join('')}</select>
-    <span class="sp"></span><button type="button" class="btn btn-line" data-act="admImport">Importar / exportar</button><button type="button" class="btn btn-primary" data-act="admNew">Nuevo producto</button></div>
+    <span class="sp"></span><button type="button" class="btn btn-line" data-act="admScan">Escanear</button><button type="button" class="btn btn-line" data-act="admLabels">Etiquetas</button><button type="button" class="btn btn-line" data-act="admImport">Importar / exportar</button><button type="button" class="btn btn-primary" data-act="admNew">Nuevo producto</button></div>
     <p class="note" style="margin:-4px 0 12px">Editá precio, precio anterior (para mostrar la oferta) y stock directamente en la lista. Los cambios se publican al instante.</p>
     <div id="aList">${productRows()}</div>`;
 }
@@ -96,7 +96,7 @@ function productsTab() {
 function openForm(title, html) {
   const d = $('#dlgForm');
   d.innerHTML = `<div class="dlg-in"><button type="button" class="dlg-x" data-act="closeDlg" aria-label="Cerrar">×</button><h2>${esc(title)}</h2>${html}</div>`;
-  d.showModal();
+  if (!d.open) d.showModal();
 }
 function imageField(image, art, accent) {
   const isData = String(image || '').startsWith('data:');
@@ -170,13 +170,14 @@ async function fileToDataUrlLocal(file, maxSide, maxLen = 600000) {
   throw new Error('La imagen es demasiado pesada. Probá con una más chica.');
 }
 
-function openProductForm(id) {
+function openProductForm(id, preset) {
   if (!Object.keys(CATS).length) { state.admin.tab = 'categories'; renderAdminBody(); return toast('Primero creá al menos una categoría (por ejemplo “Televisores”).', { bad: true }); }
-  const p = id ? state.products.find(x => x.id === id) : { category: state.admin.cat || Object.keys(CATS)[0], active: true };
+  const p = id ? state.products.find(x => x.id === id) : { category: state.admin.cat || Object.keys(CATS)[0], active: true, ...(preset || {}) };
   const subs = [...new Set(state.products.map(x => x.sub).filter(Boolean))];
   openForm(id ? 'Editar producto' : 'Nuevo producto', `<form data-form="product" data-id="${esc(id || '')}" novalidate>
     <div class="form-grid">
       <div class="field full"><label for="f-n">Nombre</label><input class="in" id="f-n" name="name" required value="${esc(p.name)}"></div>
+      <div class="field full"><label for="f-bc">Código de barras (opcional)</label><div class="row"><input class="in" id="f-bc" name="barcode" inputmode="text" autocomplete="off" autocapitalize="none" value="${esc(p.barcode || '')}" placeholder="Escaneá o escribí el código" style="flex:1;min-width:0"><button type="button" class="btn btn-line btn-sm" data-act="admBcScan">Escanear</button><button type="button" class="btn btn-line btn-sm" data-act="admBcGen">Generar</button></div><div id="bcPrev" class="bc-prev">${p.barcode ? barcodeSvg(p.barcode, { width: 220, height: 50, fontSize: 11 }) : ''}</div><small>Con lector USB: hacé clic en el campo y escaneá. Si el producto no trae código, tocá <b>Generar</b> para crear uno interno e imprimilo desde <b>Etiquetas</b>.</small></div>
       <div class="field"><label for="f-c">Sección</label><select class="in" id="f-c" name="category" data-act="admPreview">${Object.entries(CATS).map(([k, c]) => `<option value="${k}" ${p.category === k ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
       <div class="field"><label for="f-s">Subcategoría</label><input class="in" id="f-s" name="sub" list="subs" placeholder="Ej.: Mouse, Heladeras" value="${esc(p.sub)}"><datalist id="subs">${subs.map(s => `<option value="${esc(s)}">`).join('')}</datalist></div>
       <div class="field"><label for="f-b">Marca</label><input class="in" id="f-b" name="brand" value="${esc(p.brand)}"></div>
@@ -317,7 +318,7 @@ function settingsTab() {
     <label class="chk" style="margin:6px 0 14px"><input type="checkbox" name="askPickup" ${s.askPickup ? 'checked' : ''}> Pedir día y hora de retiro cuando el cliente retira en el local</label>
     <div class="field"><label for="s-ti">Datos para transferencias (se muestran al cliente que elige “Transferencia”)</label><textarea class="in" id="s-ti" name="transferInfo" rows="3" placeholder="Banco, cuenta, titular, alias…">${esc(s.transferInfo)}</textarea></div>
     <div class="field full"><label for="s-rv">Opiniones de clientes</label><select class="in" id="s-rv" name="reviewsMode"><option value="on" ${s.reviewsMode !== 'off' ? 'selected' : ''}>Activadas (las aprobás vos antes de publicarse)</option><option value="off" ${s.reviewsMode === 'off' ? 'selected' : ''}>Desactivadas</option></select></div>
-    <div class="field full"><label for="s-mp">Mercado Pago</label><select class="in" id="s-mp" name="mpMode"><option value="off" ${s.mpMode !== 'link' && s.mpMode !== 'api' ? 'selected' : ''}>No usar</option><option value="link" ${s.mpMode === 'link' ? 'selected' : ''}>Link de pago fijo (sin servidor, el cliente manda comprobante)</option><option value="api" ${s.mpMode === 'api' ? 'selected' : ''}>Checkout automático (requiere Cloud Function)</option></select></div>
+    <div class="field full"><label for="s-mp">Mercado Pago ${mpStatus(s)}</label><select class="in" id="s-mp" name="mpMode"><option value="off" ${s.mpMode !== 'link' && s.mpMode !== 'api' ? 'selected' : ''}>No usar</option><option value="link" ${s.mpMode === 'link' ? 'selected' : ''}>Link de pago fijo (sin servidor, el cliente manda comprobante)</option><option value="api" ${s.mpMode === 'api' ? 'selected' : ''}>Checkout automático (requiere Cloud Function)</option></select></div>
     <div class="field"><label for="s-mpl">Link de pago de Mercado Pago (https://…)</label><input class="in" id="s-mpl" name="mpLink" value="${esc(s.mpLink || '')}" placeholder="https://mpago.la/…"></div>
     <div class="field"><label for="s-mpu">URL de la función createMpPayment (https://…)</label><input class="in" id="s-mpu" name="mpUrl" value="${esc(s.mpUrl || '')}" placeholder="https://us-central1-…cloudfunctions.net/createMpPayment"></div>
     <div class="field"><label for="s-fs">Envío gratis desde (monto, 0 = no usar)</label><input class="in" id="s-fs" name="freeShippingFrom" type="number" min="0" step="1" value="${esc(s.freeShippingFrom || 0)}"><small>Si el pedido (con descuentos) llega a ese monto, el envío es gratis en las localidades con costo.</small></div>
@@ -371,6 +372,17 @@ function adminClick(a, t) {
   if (a === 'admTab') { state.admin.tab = t.dataset.tab; renderAdminBody(); }
   else if (a === 'admGenVs') { const f = t.closest('form'), keys = comboKeys(parseVariantsText($('#f-v', f).value)); if (!keys.length) return toast('Primero escribí las variantes (ej. Talle: S, M, L).', { bad: true }); const cur = parseVS($('#f-vs', f).value); $('#f-vs', f).value = keys.map(k => k + ': ' + (cur[k] ?? 0)).join('\n'); }
   else if (a === 'admNew') openProductForm();
+  else if (a === 'admScan') openAdminScanner();
+  else if (a === 'admLabels') openLabelsDialog();
+  else if (a === 'admBcScan') openScanner({ title: 'Escanear código del producto', onCode: c => { const f = $('#f-bc'); if (!f) return { msg: 'Cerrá y volvé a abrir el formulario.', ok: false }; f.value = c; f.dispatchEvent(new Event('input', { bubbles: true })); return { msg: 'Código cargado: ' + c }; } });
+  else if (a === 'admBcGen') { const f = $('#f-bc'); if (f && (!f.value.trim() || confirm('Ya hay un código escrito. ¿Reemplazarlo por uno nuevo?'))) { f.value = genInternalCode(barcodeTaken()); f.dispatchEvent(new Event('input', { bubbles: true })); } }
+  else if (a === 'admLblAll') { $$('#lblList input[type=checkbox]').forEach(x => { x.checked = t.dataset.v === '1'; }); }
+  else if (a === 'admLblGen') genMissingCodes();
+  else if (a === 'admLblPrint') {
+    const items = $$('#lblList .lrow').map(r => ({ p: state.products.find(x => x.id === r.dataset.id), on: $('input[type=checkbox]', r).checked, n: Math.max(1, Math.min(99, Math.floor(Number($('input[type=number]', r).value) || 1))) })).filter(x => x.on && x.p && x.p.barcode).map(x => ({ p: x.p, n: x.n }));
+    if (!items.length) return toast('Elegí al menos un producto con código.', { bad: true });
+    printLabels(items, $('#lblSize').value);
+  }
   else if (a === 'admImport') openImportDialog();
   else if (a === 'admRevToggle') { const r = state.reviewsAll.find(x => x.id === id); if (r) guarded(async () => { await DB.save('reviews', id, { status: r.status === 'approved' ? 'pending' : 'approved' }); toast(r.status === 'approved' ? 'Opinión oculta' : 'Opinión publicada'); }); }
   else if (a === 'admRevDel') { if (!confirm('¿Eliminar esta opinión?')) return; guarded(async () => { await DB.remove('reviews', id); toast('Opinión eliminada'); }); }
@@ -479,7 +491,12 @@ async function adminSubmit(form) {
     if (stock !== null && (Number.isNaN(stock) || stock < 0)) return formErr(form, 'El stock no es válido.');
     let images = []; try { images = JSON.parse(f.get('images') || '[]').filter(x => typeof x === 'string' && x).slice(0, MAX_IMGS); } catch { /* vacío */ }
     if (images.join('').length > 850000) return formErr(form, 'Las fotos pesan demasiado en total (límite de Firestore ~1 MB). Quitá alguna o usá enlaces.');
-    const data = { name: s('name'), category: s('category'), sub: s('sub'), brand: s('brand'), price, oldPrice: old, stock, description: s('description'), specs: String(f.get('specs') || '').trim(), variants: String(f.get('variants') || '').split('\n').map(l => { const [n, o] = l.split(':'); return { name: (n || '').trim(), options: [...new Set(String(o || '').split(',').map(x => x.trim()).filter(Boolean))].slice(0, 20) }; }).filter(g => g.name && g.options.length).slice(0, 3), images, image: images[0] || '', art: s('art'), active: f.get('active') === 'on', catalogOnly: f.get('catalogOnly') === 'on', hidePrice: f.get('catalogOnly') === 'on' && f.get('hidePrice') === 'on', updatedAt: Date.now() };
+    const bcode = normCode(s('barcode'));
+    if (bcode) {
+      const bp = eanProblem(bcode); if (bp) return formErr(form, bp);
+      const dup = findByBarcode(bcode); if (dup && dup.id !== (form.dataset.id || '')) return formErr(form, `Ese código ya lo usa “${dup.name}”.`);
+    }
+    const data = { barcode: bcode, name: s('name'), category: s('category'), sub: s('sub'), brand: s('brand'), price, oldPrice: old, stock, description: s('description'), specs: String(f.get('specs') || '').trim(), variants: String(f.get('variants') || '').split('\n').map(l => { const [n, o] = l.split(':'); return { name: (n || '').trim(), options: [...new Set(String(o || '').split(',').map(x => x.trim()).filter(Boolean))].slice(0, 20) }; }).filter(g => g.name && g.options.length).slice(0, 3), images, image: images[0] || '', art: s('art'), active: f.get('active') === 'on', catalogOnly: f.get('catalogOnly') === 'on', hidePrice: f.get('catalogOnly') === 'on' && f.get('hidePrice') === 'on', updatedAt: Date.now() };
     const vsTxt = String(f.get('vstock') || '').trim();
     if (vsTxt && data.variants.length) {
       const vs = parseVS(vsTxt, comboKeys(data.variants));
@@ -542,7 +559,7 @@ async function adminSubmit(form) {
 
 
 /* ───────── Carga masiva, exportar y respaldo (CSV: se abre y se edita con Excel / Google Sheets) ───────── */
-const CSV_COLS = ['nombre', 'categoria', 'subcategoria', 'marca', 'precio', 'precio_anterior', 'stock', 'descripcion', 'caracteristicas', 'variantes', 'fotos', 'visible', 'solo_catalogo', 'ocultar_precio', 'stock_variantes'];
+const CSV_COLS = ['nombre', 'categoria', 'subcategoria', 'marca', 'precio', 'precio_anterior', 'stock', 'descripcion', 'caracteristicas', 'variantes', 'fotos', 'visible', 'solo_catalogo', 'ocultar_precio', 'stock_variantes', 'codigo_barras'];
 function csvParse(text) {
   text = String(text).replace(/^\uFEFF/, '');
   const first = text.split(/\r?\n/)[0] || '', d = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
@@ -561,7 +578,7 @@ function csvParse(text) {
 const csvCell = v => { const t = String(v ?? ''); return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
 function productsCsv(list) {
   const rows = list.map(p => [p.name, CATS[p.category]?.name || p.category || '', p.sub || '', p.brand || '', p.price ?? '', p.oldPrice || '', p.stock ?? '', p.description || '', String(p.specs || '').split('\n').map(x => x.trim()).filter(Boolean).join(' | '),
-    prodVariants(p).map(g => g.name + ': ' + g.options.join(', ')).join(' | '), (p.images && p.images.length ? p.images : p.image ? [p.image] : []).filter(u => !String(u).startsWith('data:')).join(' | '), p.active === false ? 'no' : 'si', p.catalogOnly ? 'si' : '', p.hidePrice ? 'si' : '', Object.entries(p.vstock || {}).map(([k, n]) => k + '=' + n).join(' | ')]);
+    prodVariants(p).map(g => g.name + ': ' + g.options.join(', ')).join(' | '), (p.images && p.images.length ? p.images : p.image ? [p.image] : []).filter(u => !String(u).startsWith('data:')).join(' | '), p.active === false ? 'no' : 'si', p.catalogOnly ? 'si' : '', p.hidePrice ? 'si' : '', Object.entries(p.vstock || {}).map(([k, n]) => k + '=' + n).join(' | '), p.barcode || '']);
   return [CSV_COLS, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n');
 }
 function ordersCsv(list) {
@@ -584,7 +601,7 @@ function openImportDialog() {
     <small class="muted">Columnas: ${CSV_COLS.join(', ')}. En <i>variantes</i> usá <code>Talle: S, M, L | Color: Negro, Blanco</code>; en <i>fotos</i> y <i>caracteristicas</i>, separá con <code> | </code>. Las fotos subidas desde el panel no se exportan (solo los enlaces).</small></div>`);
 }
 const normH = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-const ALIAS = { nombre: 'nombre', producto: 'nombre', name: 'nombre', categoria: 'categoria', seccion: 'categoria', subcategoria: 'subcategoria', marca: 'marca', precio: 'precio', precio_anterior: 'precio_anterior', precio_antes: 'precio_anterior', stock: 'stock', descripcion: 'descripcion', caracteristicas: 'caracteristicas', variantes: 'variantes', fotos: 'fotos', imagenes: 'fotos', visible: 'visible', solo_catalogo: 'solo_catalogo', ocultar_precio: 'ocultar_precio', stock_variantes: 'stock_variantes' };
+const ALIAS = { nombre: 'nombre', producto: 'nombre', name: 'nombre', categoria: 'categoria', seccion: 'categoria', subcategoria: 'subcategoria', marca: 'marca', precio: 'precio', precio_anterior: 'precio_anterior', precio_antes: 'precio_anterior', stock: 'stock', descripcion: 'descripcion', caracteristicas: 'caracteristicas', variantes: 'variantes', fotos: 'fotos', imagenes: 'fotos', visible: 'visible', solo_catalogo: 'solo_catalogo', ocultar_precio: 'ocultar_precio', stock_variantes: 'stock_variantes', codigo_barras: 'codigo_barras', codigo: 'codigo_barras', ean: 'codigo_barras', barcode: 'codigo_barras' };
 function parseMoney(v) {
   let t = String(v ?? '').replace(/[^0-9.,-]/g, ''); if (t === '') return NaN;
   if (t.includes(',') && t.includes('.')) t = t.replace(/\./g, '').replace(',', '.');
@@ -612,9 +629,9 @@ function importPreview(text) {
     if (cname && !ck) { ck = 'new:' + normH(cname); newCats.set(ck, cname); }
     if (!ck) { issues.push(`Fila ${line} (${name}): falta la categoría y no hay ninguna creada.`); return; }
     const old = parseMoney(get(r, 'precio_anterior')), stockRaw = get(r, 'stock'), stock = stockRaw === '' ? null : Math.max(0, Math.floor(parseMoney(stockRaw)));
-    const exist = state.products.find(p => normH(p.name) === normH(name));
+    const bcv = normCode(get(r, 'codigo_barras')), exist = (bcv && findByBarcode(bcv)) || state.products.find(p => normH(p.name) === normH(name));
     items.push({ exist, data: {
-      name, category: ck, sub: get(r, 'subcategoria'), brand: get(r, 'marca'), price, oldPrice: old > price ? old : null, stock: Number.isNaN(stock) ? null : stock,
+      name, barcode: bcv, category: ck, sub: get(r, 'subcategoria'), brand: get(r, 'marca'), price, oldPrice: old > price ? old : null, stock: Number.isNaN(stock) ? null : stock,
       description: get(r, 'descripcion'), specs: get(r, 'caracteristicas').split('|').map(x => x.trim()).filter(Boolean).join('\n'),
       variants: get(r, 'variantes').split('|').map(g => { const [n, o] = g.split(':'); return { name: (n || '').trim(), options: [...new Set(String(o || '').split(',').map(x => x.trim()).filter(Boolean))].slice(0, 20) }; }).filter(g => g.name && g.options.length).slice(0, 3),
       images: get(r, 'fotos').split('|').map(x => x.trim()).filter(u => /^https?:\/\//i.test(u)).slice(0, MAX_IMGS),
@@ -697,4 +714,75 @@ function adminsTab() {
     <div class="field"><label for="n-p">Contraseña (mínimo 6)</label><input class="in" id="n-p" name="password" type="password" autocomplete="new-password"></div></div>
     <p class="err" data-err hidden role="alert"></p><button type="submit" class="btn btn-primary">Crear administrador</button>
     <p class="note" style="margin-top:10px">Crea la cuenta y le da permiso para editar productos, precios y pedidos. Requiere que el registro esté activado en Firebase (Authentication > Configuración > Acciones del usuario) y las reglas nuevas publicadas.</p></form>`;
+}
+
+/* ── Códigos de barras en el panel ── */
+document.addEventListener('input', e => {
+  if (e.target && e.target.id === 'f-bc') { const pv = $('#bcPrev'), c = normCode(e.target.value); if (pv) pv.innerHTML = c ? (barcodeSvg(c, { width: 220, height: 50, fontSize: 11 }) || '<small class="err">Este código tiene caracteres que no se pueden imprimir.</small>') : ''; }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'f-bc') e.preventDefault(); }); // el lector USB termina con Enter: no enviar el formulario
+
+/* Lectura desde el panel: abre el producto o propone crearlo */
+function adminScan(code) {
+  const p = findByBarcode(code);
+  if (p) { scanBeep(true); const d = $('#dlgForm'); if (d && d.open) d.close(); openProductForm(p.id); return { msg: p.name, ok: true }; }
+  scanBeep(false);
+  askConfirm(`El código ${code} no está cargado. ¿Crear un producto nuevo con ese código?`, 'Crear producto').then(ok => { if (ok) { state.admin.tab = 'products'; openProductForm(null, { barcode: code }); } });
+  return { msg: `Código ${code} sin producto`, ok: false };
+}
+function openAdminScanner() {
+  openScanner({
+    title: 'Escanear productos', keep: true,
+    modes: [{ id: 'find', label: 'Buscar / editar' }, { id: 'add', label: 'Sumar stock (llegó mercadería)' }, { id: 'sub', label: 'Restar stock (venta en mostrador)' }],
+    hint: 'Elegí qué hacer y escaneá. Funciona con la cámara o con un lector USB.',
+    onCode: async (code, mode, qty) => {
+      if (mode === 'find') {
+        const p = findByBarcode(code);
+        if (!p) { closeScanner(); return adminScan(code); }
+        closeScanner(); openProductForm(p.id); return { msg: p.name };
+      }
+      const p = findByBarcode(code);
+      if (!p) return { msg: `El código ${code} no está cargado. Usá “Buscar / editar” para crear el producto.`, ok: false };
+      if (hasVS(p)) return { msg: `${p.name}: tiene stock por variante, ajustalo desde Editar.`, ok: false };
+      if (p.stock === null || p.stock === undefined || p.stock === '') return { msg: `${p.name}: no tiene control de stock (sin límite).`, ok: false };
+      const cur = Number(p.stock) || 0, n = Math.max(0, cur + (mode === 'add' ? qty : -qty));
+      if (mode === 'sub' && cur <= 0) return { msg: `${p.name}: ya está sin stock.`, ok: false };
+      await DB.save('products', p.id, { stock: n, updatedAt: Date.now() }); p.stock = n;
+      return { msg: `${p.name}: ${mode === 'add' ? '+' : '−'}${qty} → stock ${n}` };
+    }
+  });
+}
+/* Etiquetas */
+function openLabelsDialog() {
+  const l = [...state.products].sort((a, b) => String(a.name).localeCompare(b.name));
+  if (!l.length) return toast('Primero cargá productos.', { bad: true });
+  const miss = l.filter(p => !p.barcode).length;
+  openForm('Imprimir etiquetas', `<p class="note" style="margin-bottom:10px">Marcá los productos y cuántas etiquetas de cada uno. Los que no tienen código no se pueden imprimir.</p>
+    ${miss ? `<p class="note"><b>${miss}</b> producto${miss === 1 ? '' : 's'} sin código. <button type="button" class="btn btn-line btn-sm" data-act="admLblGen">Generar códigos internos</button></p>` : ''}
+    <div class="row" style="margin:8px 0"><label>Tamaño <select class="in" id="lblSize"><option value="small">Rollo 50 × 30 mm</option><option value="big">Rollo 70 × 40 mm</option><option value="a4">Hoja A4 (4 columnas)</option></select></label>
+      <span class="sp"></span><button type="button" class="btn btn-line btn-sm" data-act="admLblAll" data-v="1">Marcar todos</button><button type="button" class="btn btn-line btn-sm" data-act="admLblAll" data-v="0">Desmarcar</button></div>
+    <div id="lblList" class="lbl-list">${lblRows(l)}</div>
+    <div class="dlg-f"><button type="button" class="btn btn-line" data-act="closeDlg">Cerrar</button><button type="button" class="btn btn-primary" data-act="admLblPrint">Imprimir</button></div>`);
+}
+function lblRows(l) {
+  return l.map(p => `<div class="lrow" data-id="${esc(p.id)}"><label class="lck"><input type="checkbox" ${p.barcode ? 'checked' : 'disabled'}> <span>${esc(p.name)}</span></label><small class="muted">${p.barcode ? esc(p.barcode) : 'sin código'}</small><input class="in" type="number" min="1" max="99" value="1" aria-label="Cantidad de etiquetas de ${esc(p.name)}"></div>`).join('');
+}
+async function genMissingCodes() {
+  const taken = barcodeTaken(), miss = state.products.filter(p => !p.barcode);
+  if (!miss.length) return;
+  const ok = await askConfirm(`Se crearán códigos internos para ${miss.length} producto${miss.length === 1 ? '' : 's'}. ¿Continuar?`, 'Generar');
+  if (!ok) return;
+  guarded(async () => {
+    for (const p of miss) { const c = genInternalCode(taken); if (!c) continue; taken.add(c); await DB.save('products', p.id, { barcode: c, updatedAt: Date.now() }); p.barcode = c; }
+    toast('Códigos generados'); openLabelsDialog();
+  });
+}
+
+/* Estado de configuración de Mercado Pago (se ve en rojo si falta algo) */
+function mpStatus(s) {
+  const https = v => /^https:\/\//i.test(String(v || ''));
+  let ok = false, msg = 'No configurado / no disponible: elegí un modo';
+  if (s.mpMode === 'link') { ok = https(s.mpLink); msg = ok ? 'Configurado (link fijo)' : 'No configurado / no disponible: falta el link https://'; }
+  else if (s.mpMode === 'api') { ok = https(s.mpUrl); msg = ok ? 'Configurado (checkout automático)' : 'No configurado / no disponible: falta la URL de la función'; }
+  return `<span class="mp-st ${ok ? 'ok' : 'bad'}">${ok ? '●' : '●'} ${msg}</span>`;
 }

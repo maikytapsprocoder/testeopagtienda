@@ -109,8 +109,7 @@ exports.createMpPayment = onRequest({ region: REGION, secrets: [MP_TOKEN], cors:
       total = priceOrder({ itemsTotal: v.verifiedTotal, couponCode: o.coupon, customer: o.customer || {}, settings: st.exists ? st.data() : {} }).total;
     }
     const st = await db.collection('settings').doc('store').get();
-    const host = req.get('x-forwarded-host') || req.get('host');
-    const pref = buildPreference({ code: o.code, total, storeName: st.exists ? st.data().storeName : '', back: (req.body || {}).back, notifyUrl: `https://${host}/mpWebhook` });
+    const pref = buildPreference({ code: o.code, total, storeName: st.exists ? st.data().storeName : '', back: (req.body || {}).back, notifyUrl: `https://${REGION}-${process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT}.cloudfunctions.net/mpWebhook` });
     const url = await mpCreatePreference(MP_TOKEN.value(), pref);
     await doc.ref.update({ mpPending: true, verifiedTotal: total });
     res.json({ url });

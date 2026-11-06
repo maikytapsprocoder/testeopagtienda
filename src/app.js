@@ -64,6 +64,7 @@ function fuzzyHit(v, text) {
   return text.split(' ').some(w => w.length >= 3 && (lev(v, w) <= max || (w.length > v.length && lev(v, w.slice(0, v.length)) <= max)));
 }
 function searchProducts(q, list) {
+  { const bc = typeof findByBarcode === 'function' && /^\d{6,14}$/.test(String(q).trim()) ? findByBarcode(q, list) : null; if (bc) return [bc]; }
   const groups = norm(q).split(' ').filter(Boolean).map(variantsOf);
   if (!groups.length) return [];
   const out = [];
@@ -653,8 +654,9 @@ function pickupDays() {
 }
 const MP = 'Mercado Pago';
 const mpOn = () => { const s = state.settings; return (s.mpMode === 'link' && /^https:\/\//i.test(s.mpLink || '')) || (s.mpMode === 'api' && /^https:\/\//i.test(s.mpUrl || '')); };
-const payList = delivery => [...new Set([...clean(state.settings.payMethods), ...clean(delivery === 'envio' ? state.settings.payDelivery : state.settings.payPickup), ...(mpOn() ? [MP] : [])])];
-const payHTML = (delivery, sel) => { const l = payList(delivery); return l.length ? `<span>¿Cómo querés pagar?</span><div class="radios" role="radiogroup">${l.map(m => `<label><input type="radio" name="payment" value="${esc(m)}" ${sel === m ? 'checked' : ''}> ${esc(m)}</label>`).join('')}</div>` : ''; };
+const payBase = delivery => [...new Set([...clean(state.settings.payMethods), ...clean(delivery === 'envio' ? state.settings.payDelivery : state.settings.payPickup)])].filter(m => m !== MP);
+const payList = delivery => [...payBase(delivery), ...(mpOn() ? [MP] : [])]; // opciones realmente elegibles
+const payHTML = (delivery, sel) => { const l = [...payBase(delivery), MP]; return `<span>¿Cómo querés pagar?</span><div class="radios" role="radiogroup">${l.map(m => m === MP && !mpOn() ? `<label class="pay-off"><input type="radio" name="payment" value="${esc(m)}" disabled> ${esc(m)} <b>· No disponible</b></label>` : `<label><input type="radio" name="payment" value="${esc(m)}" ${sel === m ? 'checked' : ''}> ${esc(m)}</label>`).join('')}</div>`; };
 function readCheckout(form) {
   const f = new FormData(form);
   return { name: String(f.get('name') || '').trim(), phone: String(f.get('phone') || '').trim(), delivery: f.get('delivery') === 'envio' ? 'envio' : 'retiro', address: String(f.get('address') || '').trim(), zone: String(f.get('zone') || ''), pickupDay: String(f.get('pickupDay') || ''), pickupTime: String(f.get('pickupTime') || ''), hp: String(f.get('website') || ''), remember: f.get('remember') === 'on', payment: String(f.get('payment') || '').trim(), note: String(f.get('note') || '').trim() };

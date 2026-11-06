@@ -170,3 +170,11 @@ Hay dos modos (Ajustes → Mercado Pago):
 
 ## Opiniones de clientes
 Los clientes dejan puntaje (1–5) y comentario en la ficha del producto. Las opiniones quedan **pendientes** y solo se publican cuando las aprobás en el panel → Opiniones (también podés ocultarlas o eliminarlas). Se pueden desactivar en Ajustes. Hay que **republicar `firestore.rules`** (colección `reviews`). Sin verificación de compra: la moderación es la protección contra spam.
+
+## Códigos de barras
+- **Cargar el código**: en el producto, campo "Código de barras" (escribilo, escanealo con la cámara o con un lector USB). Si el producto no trae código, **Generar** crea uno interno único. El sistema avisa si el dígito verificador de un EAN/UPC está mal o si el código ya lo usa otro producto.
+- **Panel → Productos → Escanear**: tres modos. *Buscar / editar* (abre el producto o propone crearlo si el código es nuevo), *Sumar stock* (llegó mercadería) y *Restar stock* (venta en mostrador), con cantidad. Sigue leyendo uno tras otro y deja un registro. Con un lector USB también funciona sin abrir nada: escaneás en cualquier pantalla del panel y se abre el producto.
+- **Etiquetas**: Panel → Productos → Etiquetas. Elegí productos y cantidad, tamaño (rollo 50×30, rollo 70×40 o hoja A4) e imprimí. "Generar códigos internos" completa los que no tienen. Los códigos son EAN-13/EAN-8/UPC-A (si el código es válido) o Code 128 (cualquier otro).
+- **Tienda**: el cliente puede escribir el código en el buscador o tocar el ícono de escaneo (cámara) para abrir un producto. Un lector USB también abre el producto.
+- **Importar/exportar**: columna `codigo_barras`; al importar, los productos se emparejan primero por código y después por nombre.
+- La cámara solo funciona con la tienda publicada en **https** (GitHub Pages sirve). Usa el lector nativo del navegador y, si no existe (Firefox, Safari antiguo), descarga la librería ZXing automáticamente. Los lectores USB/Bluetooth que emulan teclado funcionan sin configurar nada.
